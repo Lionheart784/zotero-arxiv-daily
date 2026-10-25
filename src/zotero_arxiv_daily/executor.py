@@ -188,7 +188,9 @@ class Executor:
 
         citation_report = self.run_citation_alerts()
         has_citations = citation_report is not None and citation_report.has_content
-        if not reranked_papers and not has_citations and not self.config.executor.send_empty:
+        # A manual test run (debug) always sends, so the SMTP setup can be checked on any day.
+        send_anyway = self.config.executor.send_empty or bool(self.config.executor.debug)
+        if not reranked_papers and not has_citations and not send_anyway:
             logger.info("No new papers or citations found. No email will be sent.")
         else:
             logger.info("Sending email...")

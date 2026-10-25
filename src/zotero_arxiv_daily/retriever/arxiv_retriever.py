@@ -256,6 +256,16 @@ class ArxivRetriever(BaseRetriever):
                 f"(status={status}, bozo_exception={bozo_exc})"
             )
 
+        if self.config.executor.debug and not getattr(feed, "entries", None):
+            # The RSS feed is empty on weekends/holidays; let a manual test run still show papers.
+            logger.info("Debug mode: RSS feed is empty, fetching the latest papers from the arXiv API instead")
+            search = arxiv.Search(
+                query=" OR ".join(f"cat:{c}" for c in self.config.source.arxiv.category),
+                max_results=5,
+                sort_by=arxiv.SortCriterion.SubmittedDate,
+            )
+            return list(arxiv.Client(num_retries=3).results(search))
+
         allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
         target_entries = [
             i for i in feed.entries

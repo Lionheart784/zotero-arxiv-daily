@@ -252,3 +252,26 @@ def test_retrieve_raw_papers_retries_on_http_failure(config, mock_feedparser, mo
     assert len(calls) == 2
     assert len(raw) > 0
 
+
+
+def test_debug_mode_falls_back_to_arxiv_api_when_feed_is_empty(config, monkeypatch):
+    from types import SimpleNamespace
+    from omegaconf import open_dict
+    import zotero_arxiv_daily.retriever.arxiv_retriever as ar
+
+    with open_dict(config):
+        config.executor.debug = True
+    empty_feed = SimpleNamespace(status=200, bozo=False, entries=[], feed=SimpleNamespace(title="cs.AI updates"))
+    monkeypatch.setattr(ar.feedparser, "parse", lambda url: empty_feed)
+    captured = {}
+
+    class StubClient:
+        def __init__(self, **kw): pass
+        def results(self, search):
+            captured["query"] = search.query
+            return ["paper-1", "paper-2"]
+
+    monkeypatch.setattr(ar.arxiv, "Client", StubClient)
+    retriever = ar.ArxivRetriever(config)
+    assert retriever._retrieve_raw_papers() == ["paper-1", "paper-2"]
+    assert captured["query"] == "cat:cs.AI OR cat:cs.CV"
