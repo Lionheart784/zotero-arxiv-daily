@@ -264,7 +264,14 @@ class ArxivRetriever(BaseRetriever):
                 max_results=5,
                 sort_by=arxiv.SortCriterion.SubmittedDate,
             )
-            return list(arxiv.Client(num_retries=3).results(search))
+            try:
+                client = arxiv.Client(page_size=5, delay_seconds=10, num_retries=5)
+                return list(client.results(search))
+            except Exception as exc:
+                # GitHub runners share IPs and the arXiv API often answers 429; a test run
+                # should still go on and send the (paper-less) email.
+                logger.warning(f"Debug fallback to the arXiv API failed: {exc}")
+                return []
 
         allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
         target_entries = [

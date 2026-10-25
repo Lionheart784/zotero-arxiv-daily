@@ -275,3 +275,22 @@ def test_debug_mode_falls_back_to_arxiv_api_when_feed_is_empty(config, monkeypat
     retriever = ar.ArxivRetriever(config)
     assert retriever._retrieve_raw_papers() == ["paper-1", "paper-2"]
     assert captured["query"] == "cat:cs.AI OR cat:cs.CV"
+
+
+def test_debug_fallback_failure_returns_no_papers(config, monkeypatch):
+    from types import SimpleNamespace
+    from omegaconf import open_dict
+    import zotero_arxiv_daily.retriever.arxiv_retriever as ar
+
+    with open_dict(config):
+        config.executor.debug = True
+    empty_feed = SimpleNamespace(status=200, bozo=False, entries=[], feed=SimpleNamespace(title="cs.AI updates"))
+    monkeypatch.setattr(ar.feedparser, "parse", lambda url: empty_feed)
+
+    class FailingClient:
+        def __init__(self, **kw): pass
+        def results(self, search):
+            raise RuntimeError("HTTP 429")
+
+    monkeypatch.setattr(ar.arxiv, "Client", FailingClient)
+    assert ar.ArxivRetriever(config)._retrieve_raw_papers() == []
