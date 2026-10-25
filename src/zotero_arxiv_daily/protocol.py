@@ -6,12 +6,18 @@ import tiktoken
 from openai import OpenAI
 from loguru import logger
 import json
+from omegaconf import DictConfig, OmegaConf
 RawPaperItem = TypeVar('RawPaperItem')
 
 
 def _request_llm(openai_client: OpenAI, llm_params: dict, messages: list[dict]) -> str:
     api_mode = llm_params.get("api_mode", "chat_completion")
-    generation_kwargs = dict(llm_params.get("generation_kwargs", {}))
+    generation_kwargs = llm_params.get("generation_kwargs", {}) or {}
+    if isinstance(generation_kwargs, DictConfig):
+        # nested values such as extra_body must be plain dicts for the OpenAI SDK
+        generation_kwargs = OmegaConf.to_container(generation_kwargs, resolve=True)
+    # null means "do not send" (e.g. max_tokens for APIs that only take max_completion_tokens)
+    generation_kwargs = {k: v for k, v in dict(generation_kwargs).items() if v is not None}
 
     if api_mode == "chat_completion":
         response = openai_client.chat.completions.create(

@@ -17,7 +17,13 @@ llm:
     base_url: ${oc.env:OPENAI_API_BASE}
   api_mode: chat_completion
   generation_kwargs:
-    model: ${oc.env:LLM_MODEL,gpt-4o-mini}
+    # 小米 MiMo：flash 最便宜，写一句话 TL;DR 足够
+    model: ${oc.env:LLM_MODEL,mimo-v2.6-flash}
+    max_tokens: null # MiMo 文档使用 max_completion_tokens
+    max_completion_tokens: 512
+    extra_body:
+      thinking:
+        type: disabled # MiMo 默认开启思考模式，会多耗很多 token
   language: Chinese
 
 source:
@@ -28,7 +34,7 @@ source:
 executor:
   debug: ${oc.env:DEBUG,null}
   source: ['arxiv']
-  max_paper_num: 50
+  max_paper_num: 20
 
 venue_filter:
   enabled: true
