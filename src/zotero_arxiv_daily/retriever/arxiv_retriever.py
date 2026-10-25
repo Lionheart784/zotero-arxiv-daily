@@ -295,6 +295,9 @@ class ArxivRetriever(BaseRetriever):
             url=raw_paper.entry_id,
             pdf_url=pdf_url,
             full_text=full_text,
+            comment=raw_paper.comment or None,
+            journal_ref=raw_paper.journal_ref or None,
+            doi=raw_paper.doi or None,
         )
 
 

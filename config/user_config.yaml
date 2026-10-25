@@ -1,0 +1,42 @@
+zotero:
+  user_id: ${oc.env:ZOTERO_ID}
+  api_key: ${oc.env:ZOTERO_KEY}
+  # 推荐 arXiv 论文时，以「已读/CDS560」分类里的文献作为兴趣基准
+  include_path: ["已读/CDS560", "已读/CDS560/**"]
+
+email:
+  sender: ${oc.env:SENDER}
+  receiver: ${oc.env:RECEIVER}
+  smtp_server: ${oc.env:SMTP_SERVER,smtp.qq.com}
+  smtp_port: ${oc.decode:${oc.env:SMTP_PORT,465}}
+  sender_password: ${oc.env:SENDER_PASSWORD}
+
+llm:
+  api:
+    key: ${oc.env:OPENAI_API_KEY}
+    base_url: ${oc.env:OPENAI_API_BASE}
+  api_mode: chat_completion
+  generation_kwargs:
+    model: ${oc.env:LLM_MODEL,gpt-4o-mini}
+  language: Chinese
+
+source:
+  arxiv:
+    category: ["cs.AI", "cs.CL", "cs.HC", "cs.MA"]
+    include_cross_list: true
+
+executor:
+  debug: ${oc.env:DEBUG,null}
+  source: ['arxiv']
+  max_paper_num: 50
+
+venue_filter:
+  enabled: true
+  ccf_min: C
+  sjr_min: Q3
+  keep_unrated: true
+
+citation_alert:
+  enabled: true
+  include_path: ["已读/CDS560", "已读/CDS560/**"]
+  venue_filter: true

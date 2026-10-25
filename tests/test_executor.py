@@ -281,3 +281,83 @@ def test_run_no_papers_send_empty_true(config, monkeypatch):
     assert len(sent) == 1, "Email should be sent even with no papers when send_empty=true"
     _, _, body = sent[0]
     assert "text/html" in body
+
+
+def test_run_with_venue_filter_and_citation_alerts(config, monkeypatch, tmp_path):
+    """Venue labels/drops arXiv papers; new citations of tracked papers go into the same email."""
+    import smtplib
+    from types import SimpleNamespace
+
+    from omegaconf import open_dict
+
+    import zotero_arxiv_daily.citation_tracker as ct
+    import zotero_arxiv_daily.retriever.arxiv_retriever  # noqa: F401
+    from zotero_arxiv_daily.retriever.base import registered_retrievers
+    from zotero_arxiv_daily.venue_rank import VenueRanker, parse_sjr_csv
+    from tests.canned_responses import (
+        make_sample_paper,
+        make_stub_openai_client,
+        make_stub_smtp,
+        make_stub_zotero_client,
+    )
+
+    with open_dict(config):
+        config.executor.source = ["arxiv"]
+        config.executor.reranker = "api"
+        config.executor.send_empty = False
+        config.venue_filter = {"enabled": True, "ccf_min": "C", "sjr_min": "Q3", "keep_unrated": True}
+        config.citation_alert = {"enabled": True, "include_path": ["Tracked/**"], "venue_filter": True,
+                                 "alert_on_first_run": True}
+
+    stub_zot = make_stub_zotero_client()
+    tracked_items = [{"data": {"key": "T1", "itemType": "conferencePaper", "title": "Tracked paper",
+                               "DOI": "10.1/t1", "url": "", "extra": "", "collections": ["TC"]}},
+                     {"data": {"key": "N1", "itemType": "note", "collections": ["TC"]}}]
+    collections = stub_zot.collections() + [{"key": "TC", "data": {"key": "TC", "name": "Sub", "parentCollection": "TP"}},
+                                            {"key": "TP", "data": {"key": "TP", "name": "Tracked", "parentCollection": False}}]
+    stub_zot.collections = lambda: collections
+    stub_zot.top = lambda: tracked_items
+    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+
+    stub_client = make_stub_openai_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.OpenAI", lambda **kw: stub_client)
+    monkeypatch.setattr("zotero_arxiv_daily.reranker.api.OpenAI", lambda **kw: stub_client)
+
+    sjr = ('Rank;Sourceid;Title;Type;Issn;SJR;SJR Best Quartile\n'
+           '1;1;"Good Journal";journal;"11111111";1,0;Q1\n'
+           '2;2;"Weak Journal";journal;"22222222";0,1;Q4\n')
+    ranker = VenueRanker([], parse_sjr_csv(sjr))
+    monkeypatch.setattr("zotero_arxiv_daily.executor.VenueRanker.from_config", lambda cfg: ranker)
+
+    retrieved = [
+        make_sample_paper(title="Preprint", score=None),
+        make_sample_paper(title="In weak journal", score=None, journal_ref="Weak Journal 3 (2026) 1-9"),
+        make_sample_paper(title="In good journal", score=None, comment="Accepted by Good Journal"),
+    ]
+    monkeypatch.setattr(registered_retrievers["arxiv"], "retrieve_papers", lambda self: retrieved)
+
+    class FakeSource:
+        name = "fake"
+        def __init__(self, *a, **kw): pass
+        def resolve(self, paper): return "X"
+        def citations(self, pid):
+            return [ct.CitingPaper("doi:c1", "Citing in good journal", ["A"], 2026, None, ["Good Journal"]),
+                    ct.CitingPaper("doi:c2", "Citing in weak journal", ["B"], 2026, None, ["Weak Journal"])]
+    monkeypatch.setattr(ct, "SemanticScholarSource", FakeSource)
+    monkeypatch.setattr(ct, "OpenAlexSource", FakeSource)
+    monkeypatch.setattr(ct, "STATE_PATH", tmp_path / "state.json")
+
+    sent = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+    monkeypatch.setattr("zotero_arxiv_daily.retriever.base.sleep", lambda _: None)
+
+    Executor(config).run()
+
+    assert len(sent) == 1
+    import email
+    body = email.message_from_string(sent[0][2]).get_payload(decode=True).decode("utf-8")
+    assert "Preprint" in body and "In good journal" in body
+    assert "In weak journal" not in body
+    assert "Citing in good journal" in body and "Citing in weak journal" not in body
+    assert "SJR Q1" in body
+    assert (tmp_path / "state.json").exists()

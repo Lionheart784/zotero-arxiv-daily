@@ -48,6 +48,10 @@ class Paper:
     tldr: Optional[str] = None
     affiliations: Optional[list[str]] = None
     score: Optional[float] = None
+    comment: Optional[str] = None  # arXiv comment, e.g. "Accepted at ACL 2026"
+    journal_ref: Optional[str] = None
+    doi: Optional[str] = None
+    venue_label: Optional[str] = None  # filled by the venue filter, shown in the email
 
     def _generate_tldr_with_llm(self, openai_client:OpenAI,llm_params:dict) -> str:
         lang = llm_params.get('language', 'English')

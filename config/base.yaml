@@ -52,3 +52,17 @@ executor:
   max_paper_num: 100 # The maximum number of the papers presented in the email. Example: 100
   source: ??? # The sources of papers to retrieve. Example: ['arxiv','biorxiv','medrxiv','chemrxiv']
   reranker: local # The reranker to use. Example: 'local' or 'api'
+
+venue_filter:
+  enabled: false # Rate new papers with the CCF list and SJR quartiles, drop the ones below threshold. Example: true
+  ccf_min: C # Lowest CCF rank to keep: A, B or C. Example: B
+  sjr_min: Q3 # Lowest SJR best quartile to keep: Q1..Q4. Example: Q2
+  keep_unrated: true # Keep papers whose venue is on neither list (most arXiv preprints). Example: false
+  ccf_url: https://ccf.atom.im/
+  sjr_url: https://www.scimagojr.com/journalrank.php?out=xls
+
+citation_alert:
+  enabled: false # Report new citations of selected Zotero papers (Semantic Scholar, OpenAlex fallback). Example: true
+  include_path: null # Glob patterns of the Zotero collections to track. Example: ["已读/CDS560","已读/CDS560/**"]
+  venue_filter: true # Apply venue_filter thresholds to the citing papers too.
+  alert_on_first_run: false # The first run records existing citations as a baseline instead of reporting them.

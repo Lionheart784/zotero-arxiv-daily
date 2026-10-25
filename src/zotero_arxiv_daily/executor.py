@@ -11,6 +11,10 @@ from .construct_email import render_email
 from .utils import send_email
 from openai import OpenAI
 from tqdm import tqdm
+from .venue_rank import VenueRanker
+from .citation_tracker import CitationTracker, CitationReport, tracked_from_zotero
+
+SKIP_ITEM_TYPES = {"attachment", "note", "annotation"}
 
 
 def normalize_path_patterns(patterns: list[str] | ListConfig | None, config_key: str) -> list[str] | None:
@@ -39,6 +43,70 @@ class Executor:
         }
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
         self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
+        self.venue_cfg = config.get("venue_filter") or {}
+        self.citation_cfg = config.get("citation_alert") or {}
+        self._ranker = None
+
+    @property
+    def ranker(self) -> VenueRanker:
+        if self._ranker is None:
+            self._ranker = VenueRanker.from_config(self.venue_cfg)
+        return self._ranker
+
+    def filter_by_venue(self, papers):
+        """Label every paper with its CCF / SJR rating and drop the ones below threshold."""
+        kept, dropped = [], []
+        for p in papers:
+            rating = self.ranker.rate(
+                venue_names=[],
+                free_text=[p.comment] if p.comment else [],
+                journal_refs=[p.journal_ref] if p.journal_ref else [],
+            )
+            p.venue_label = rating.label()
+            (kept if self.ranker.passes(rating) else dropped).append(p)
+        for p in dropped:
+            logger.info(f"Dropped by venue filter: {p.title} [{p.venue_label}]")
+        logger.info(f"Venue filter kept {len(kept)} of {len(papers)} papers")
+        return kept
+
+    def fetch_tracked_items(self) -> list[dict]:
+        """Zotero items (any type) inside the collections listed in citation_alert.include_path."""
+        patterns = normalize_path_patterns(self.citation_cfg.get("include_path"), "citation_alert.include_path")
+        zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
+        collections = {c['key']: c for c in zot.everything(zot.collections())}
+
+        def path_of(col_key: str) -> str:
+            col = collections[col_key]['data']
+            if col.get('parentCollection'):
+                return path_of(col['parentCollection']) + '/' + col['name']
+            return col['name']
+
+        items = []
+        for it in zot.everything(zot.top()):
+            if it['data'].get('itemType') in SKIP_ITEM_TYPES:
+                continue
+            paths = [path_of(k) for k in it['data'].get('collections', []) if k in collections]
+            if patterns is None or any(glob_match(p, pat) for p in paths for pat in patterns):
+                items.append(it)
+        logger.info(f"Tracking citations of {len(items)} zotero papers")
+        return items
+
+    def run_citation_alerts(self) -> CitationReport | None:
+        if not self.citation_cfg.get("enabled", False):
+            return None
+        try:
+            tracked = tracked_from_zotero(self.fetch_tracked_items())
+            self.citation_tracker = CitationTracker(
+                self.ranker if self.citation_cfg.get("venue_filter", True) else None,
+                alert_on_first_run=self.citation_cfg.get("alert_on_first_run", False),
+            )
+            # The state is written only after the email is sent, so a failed send
+            # does not swallow today's new citations.
+            return self.citation_tracker.run(tracked, save=False)
+        except Exception as exc:
+            logger.exception(f"Citation tracking failed: {exc}")
+            return None
+
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("Fetching zotero corpus")
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
@@ -93,32 +161,39 @@ class Executor:
     def run(self):
         corpus = self.fetch_zotero_corpus()
         corpus = self.filter_corpus(corpus)
+        reranked_papers = []
         if len(corpus) == 0:
             logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
-            return
-        all_papers = []
-        for source, retriever in self.retrievers.items():
-            logger.info(f"Retrieving {source} papers...")
-            papers = retriever.retrieve_papers()
-            if len(papers) == 0:
-                logger.info(f"No {source} papers found")
-                continue
-            logger.info(f"Retrieved {len(papers)} {source} papers")
-            all_papers.extend(papers)
-        logger.info(f"Total {len(all_papers)} papers retrieved from all sources")
-        reranked_papers = []
-        if len(all_papers) > 0:
-            logger.info("Reranking papers...")
-            reranked_papers = self.reranker.rerank(all_papers, corpus)
-            reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
-            logger.info("Generating TLDR and affiliations...")
-            for p in tqdm(reranked_papers):
-                p.generate_tldr(self.openai_client, self.config.llm)
-                p.generate_affiliations(self.openai_client, self.config.llm)
-        elif not self.config.executor.send_empty:
-            logger.info("No new papers found. No email will be sent.")
-            return
-        logger.info("Sending email...")
-        email_content = render_email(reranked_papers)
-        send_email(self.config, email_content)
-        logger.info("Email sent successfully")
+        else:
+            all_papers = []
+            for source, retriever in self.retrievers.items():
+                logger.info(f"Retrieving {source} papers...")
+                papers = retriever.retrieve_papers()
+                if len(papers) == 0:
+                    logger.info(f"No {source} papers found")
+                    continue
+                logger.info(f"Retrieved {len(papers)} {source} papers")
+                all_papers.extend(papers)
+            logger.info(f"Total {len(all_papers)} papers retrieved from all sources")
+            if all_papers and self.venue_cfg.get("enabled", False):
+                all_papers = self.filter_by_venue(all_papers)
+            if len(all_papers) > 0:
+                logger.info("Reranking papers...")
+                reranked_papers = self.reranker.rerank(all_papers, corpus)
+                reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
+                logger.info("Generating TLDR and affiliations...")
+                for p in tqdm(reranked_papers):
+                    p.generate_tldr(self.openai_client, self.config.llm)
+                    p.generate_affiliations(self.openai_client, self.config.llm)
+
+        citation_report = self.run_citation_alerts()
+        has_citations = citation_report is not None and citation_report.has_content
+        if not reranked_papers and not has_citations and not self.config.executor.send_empty:
+            logger.info("No new papers or citations found. No email will be sent.")
+        else:
+            logger.info("Sending email...")
+            email_content = render_email(reranked_papers, citation_report)
+            send_email(self.config, email_content)
+            logger.info("Email sent successfully")
+        if citation_report is not None:
+            self.citation_tracker.commit(citation_report)
