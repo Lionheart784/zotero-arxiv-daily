@@ -35,6 +35,7 @@ executor:
   debug: ${oc.env:DEBUG,null}
   source: ['arxiv']
   max_paper_num: 20
+  send_empty: true # 没有新论文、新被引的日子也发一封，方便确认运行正常
 
 venue_filter:
   enabled: true

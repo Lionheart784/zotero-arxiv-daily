@@ -51,7 +51,7 @@ def get_empty_html():
   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
   <tr>
     <td style="font-size: 20px; font-weight: bold; color: #333;">
-        No Papers Today. Take a Rest!
+        今天没有新的 arXiv 论文（arXiv 周末和美国节假日不发布）。
     </td>
   </tr>
   </table>
@@ -156,11 +156,11 @@ def get_stars(score:float):
 
 def render_email(papers:list[Paper], citation_report: "CitationReport | None" = None) -> str:
     parts = []
-    if citation_report is not None and (citation_report.has_content or citation_report.baselined or citation_report.failed):
+    if citation_report is not None:
         parts.append(get_citation_section_html(citation_report))
 
-    if len(papers) == 0 and not parts:
-        return framework.replace('__CONTENT__', get_empty_html())
+    if len(papers) == 0:
+        parts.append(get_empty_html())
 
     for p in papers:
         #rate = get_stars(p.score)
