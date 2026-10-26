@@ -39,6 +39,7 @@
     "title:thetomatofestivaltowardsusingchatgptforlongformdiscoursegenerationofplanbasednarratives"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "Player-Driven Emergence in LLM-Driven Game Narrative"
   },
   "doi:10.1145/3586183.3606763": {
@@ -245,6 +246,7 @@
     "doi:10.51685/jqd.2024.icwsm.7"
    ],
    "since": "2026-10-25",
+   "source": "openalex",
    "title": "Generative agents: Interactive simulacra of human behavior"
   },
   "doi:10.1145/3698061.3726906": {
@@ -261,6 +263,7 @@
     "doi:10.2139/ssrn.6443058"
    ],
    "since": "2026-10-25",
+   "source": "openalex",
    "title": "Orchid: A creative approach for authoring LLM-driven interactive narratives"
   },
   "doi:10.1145/3706599.3720212": {
@@ -280,6 +283,7 @@
     "doi:10.1145/3815598.3815622"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "LIGS: Developing an LLM-infused Game System for Emergent Narrative"
   },
   "doi:10.1145/3742413.3789218": {
@@ -289,6 +293,7 @@
     "doi:10.1145/3830398.3830560"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "Guiding, Not Railroading: Design and Evaluation of a Multi-Agent System for Narrative Redirection in Role-playing Games"
   },
   "doi:10.1609/aiide.v20i1.31868": {
@@ -314,6 +319,7 @@
     "doi:10.5753/sbgames.2025.9987"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "NarrativeGenie: Generating narrative beats and dynamic storytelling with large language models"
   },
   "doi:10.18653/v1/2025.acl-long.546": {
@@ -333,6 +339,7 @@
     "doi:10.1145/3786995.3787035"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "Towards enhanced immersion and agency for LLM-based interactive drama"
   },
   "doi:10.3390/ai6050093": {
@@ -346,6 +353,7 @@
     "doi:10.3390/systems14020175"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "Personalized non-player characters: A framework for character-consistent dialogue generation"
   },
   "doi:10.3390/systems14020175": {
@@ -354,6 +362,7 @@
     "doi:10.3390/app16062966"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "Game Knowledge Management System: Schema-Governed LLM Pipeline for Executable Narrative Generation in RPGs"
   },
   "doi:10.48550/arxiv.2407.04363": {
@@ -485,6 +494,7 @@
     "title:s3memstructuredspatiotemporalsceneeventmemoryforlonghorizoninteractivequestionanswering"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "AriGraph: Learning Knowledge Graph World Models with Episodic Memory for LLM Agents"
   },
   "doi:10.48550/arxiv.2409.06949": {
@@ -497,6 +507,7 @@
     "doi:10.1145/3757279.3788663"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "You have thirteen hours in which to solve the labyrinth: Enhancing AI game masters with function calling"
   },
   "doi:10.48550/arxiv.2505.03547": {
@@ -509,6 +520,7 @@
     "doi:10.3390/sym18010113"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "STORY2GAME: Generating (almost) everything in an interactive fiction game"
   },
   "doi:10.48550/arxiv.2510.13363": {
@@ -519,6 +531,7 @@
     "doi:10.18653/v1/2026.findings-acl.945"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "D-SMART: Enhancing LLM dialogue consistency via dynamic structured memory and reasoning tree"
   },
   "doi:10.48550/arxiv.2603.05890": {
@@ -536,6 +549,7 @@
     "title:narrativeplanningusingllmsasamodelofactionbelievability"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "Lost in stories: Consistency bugs in long story generation by LLMs"
   },
   "zotero:6JXTUC75": {
@@ -555,6 +569,7 @@
     "doi:10.1109/iccv51701.2025.00049"
    ],
    "since": "2026-10-25",
+   "source": "semantic_scholar",
    "title": "RPGBench: Evaluating large language models as role-playing game engines"
   }
  },

@@ -117,3 +117,36 @@ def test_same_citing_paper_for_two_tracked_papers_is_merged(tmp_path):
 
     html = render_email([], report)
     assert "Cites both" in html and "Paper A" in html and "新增被引提醒" in html
+
+
+def test_source_switch_rebaselines_without_alerts(tmp_path):
+    state = tmp_path / "state.json"
+    paper = TrackedPaper("doi:10.1/a", "AAA", "Paper A", "10.1/a")
+    partial = FakeSource({"doi:10.1/a": [cp("doi:c1", "C1")]})
+    partial.name = "openalex"
+    CitationTracker(None, state, sources=[partial]).run([paper])
+
+    full = FakeSource({"doi:10.1/a": [cp("doi:c1", "C1"), cp("doi:c2", "C2"), cp("doi:c3", "C3")]})
+    full.name = "semantic_scholar"
+    broken = FakeSource({}, fail={"doi:10.1/a"})
+    broken.name = "openalex"
+    report = CitationTracker(None, state, sources=[full, broken]).run([paper])
+    assert report.alerts == []  # C2/C3 came from the switch, not from new citations
+    assert report.baselined == {"Paper A": 3}
+    saved = json.loads(state.read_text())["tracked"]["doi:10.1/a"]
+    assert saved["source"] == "semantic_scholar" and len(saved["seen"]) == 3
+
+    full.citations_by_id["doi:10.1/a"].append(cp("doi:c4", "C4"))
+    report = CitationTracker(None, state, sources=[full, broken]).run([paper])
+    assert [a.citing.title for a in report.alerts] == ["C4"]
+
+
+def test_openalex_partial_paging_raises(monkeypatch):
+    import pytest
+    from zotero_arxiv_daily.citation_tracker import OpenAlexSource
+
+    src = OpenAlexSource()
+    pages = [{"results": [{"display_name": "W1", "doi": "https://doi.org/10.1/w1"}], "meta": {"next_cursor": "abc"}}, None]
+    monkeypatch.setattr(src.http, "get", lambda url, params=None: pages.pop(0))
+    with pytest.raises(RuntimeError, match="incomplete"):
+        src.citations("W123")

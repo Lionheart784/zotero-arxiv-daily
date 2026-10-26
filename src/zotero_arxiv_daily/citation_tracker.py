@@ -141,8 +141,8 @@ class _Http:
         self.min_interval = min_interval
         self._last = 0.0
 
-    def get(self, url: str, params: dict | None = None, retries: int = 5) -> Optional[dict]:
-        delay = 3.0
+    def get(self, url: str, params: dict | None = None, retries: int = 7) -> Optional[dict]:
+        delay = 5.0  # 429s from the shared Semantic Scholar pool can last a few minutes
         for attempt in range(retries):
             wait = self.min_interval - (time.monotonic() - self._last)
             if wait > 0:
@@ -205,6 +205,8 @@ class SemanticScholarSource:
                 params={"fields": S2_CITATION_FIELDS, "limit": 1000, "offset": offset},
             )
             if data is None:
+                if offset:
+                    raise RuntimeError(f"citation list incomplete after {len(out)} entries")
                 break
             for row in data.get("data", []):
                 c = row.get("citingPaper") or {}
@@ -266,6 +268,9 @@ class OpenAlexSource:
                         "cursor": cursor, "select": OPENALEX_SELECT},
             )
             if data is None:
+                if out:
+                    # e.g. OpenAlex now needs an API key to page past the first 200 results
+                    raise RuntimeError(f"citation list incomplete after {len(out)} entries")
                 break
             for w in data.get("results", []):
                 title = w.get("display_name")
@@ -322,8 +327,10 @@ class CitationTracker:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path.write_text(json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
 
-    def _fetch_citations(self, paper: TrackedPaper) -> Optional[list[CitingPaper]]:
-        for source in self.sources:
+    def _fetch_citations(self, paper: TrackedPaper, preferred: Optional[str] = None):
+        """Return (source name, citing papers), or None if every source failed."""
+        sources = sorted(self.sources, key=lambda src: src.name != preferred) if preferred else self.sources
+        for source in sources:
             try:
                 pid = source.resolve(paper)
                 if pid is None:
@@ -331,7 +338,7 @@ class CitationTracker:
                     continue
                 cites = source.citations(pid)
                 logger.info(f"[{source.name}] '{paper.title}': {len(cites)} citing papers")
-                return cites
+                return source.name, cites
             except Exception as exc:
                 logger.warning(f"[{source.name}] failed for '{paper.title}': {exc}")
         return None
@@ -349,18 +356,28 @@ class CitationTracker:
         today = date.today().isoformat()
 
         for paper in tracked:
-            cites = self._fetch_citations(paper)
-            if cites is None:
+            entry = state["tracked"].get(paper.key)
+            fetched = self._fetch_citations(paper, preferred=(entry or {}).get("source"))
+            if fetched is None:
                 report.failed.append(paper.title)
                 continue  # keep yesterday's state untouched
-            entry = state["tracked"].get(paper.key)
+            source_name, cites = fetched
             current = {c.key: c for c in cites}
             if entry is None:
-                state["tracked"][paper.key] = {"title": paper.title, "since": today, "seen": sorted(current)}
+                state["tracked"][paper.key] = {"title": paper.title, "since": today,
+                                               "source": source_name, "seen": sorted(current)}
                 report.baselined[paper.title] = len(current)
                 if not self.alert_on_first_run:
                     continue
                 new_keys = list(current)
+            elif entry.setdefault("source", source_name) != source_name:
+                # Different databases list different citing papers (and older states have no
+                # source recorded); treat today's list as the new baseline instead of alerting.
+                entry["seen"] = sorted(set(entry.get("seen", [])) | set(current))
+                entry["source"] = source_name
+                entry["title"] = paper.title
+                report.baselined[paper.title] = len(current)
+                continue
             else:
                 seen = set(entry.get("seen", []))
                 new_keys = [k for k in current if k not in seen]
